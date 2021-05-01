@@ -35,7 +35,7 @@ classifiers = [  # Update me
 python = ">=3.6.1,<4.0"
 importlib_metadata = {version = "^1.6.0"}
 typer = {extras = ["all"], version = "^0.3.2"}
-rich = "^9.8.2"
+rich = "^10.1.0"
 scikit-learn = ">=0.22.0"
 pandas = ">=0.23.0"
 lightgbm = ">=2"
