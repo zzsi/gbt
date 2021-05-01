@@ -1,0 +1,302 @@
+"""Top level methods for boosted_tree_kungfu.
+"""
+from glob import glob
+from os import path
+
+import numpy as np
+import pandas as pd
+
+from .dataset_builder import DatasetBuilder
+from .feature_transformer import FeatureTransformer
+from .gbt import BoostedTreeModel
+from .metrics import (
+    mean_absolute_error,
+    mean_absolute_percentage_error,
+    mean_log10_error,
+    r2_score,
+)
+from .sk import SkTreeModel
+
+csd = path.dirname(path.realpath(__file__))
+
+
+class BaseMetricCalculator:
+    def __init__(self, task="regression"):
+        """
+        task: str, 'regression' or 'classification'.
+        """
+        self.task = task
+
+    def run(self, y_true, y_pred, features=None):
+        if self.task == "regression":
+            self.result = self.calculate_for_regression(
+                y_true, y_pred, features
+            )
+        elif self.task == "classification":
+            self.result = self.calculate_for_classification(
+                y_true, y_pred, features
+            )
+        return self.result
+
+    def print(self):
+        for k in ["r2", "mape", "mae", "mae_log10"]:
+            value = self.result[k]
+            print(f"{k.upper()}: {value}")
+
+    def calculate_for_regression(self, y_true, y_pred, features=None):
+        r2 = r2_score(y_true, y_pred)
+        mape = mean_absolute_percentage_error(y_true, y_pred)
+        mae_log10 = mean_log10_error(y_true, y_pred)
+        mae = mean_absolute_error(y_true, y_pred)
+        return {"r2": r2, "mape": mape, "mae": mae, "mae_log10": mae_log10}
+
+    def calculate_for_classification(self, y_true, y_pred, features=None):
+        raise NotImplementedError
+
+
+def train(
+    df,
+    df_test=None,
+    recipe="l2",
+    categorical_feature_columns=None,
+    numerical_feature_columns=None,
+    preprocess_fn=None,
+    sort_by_columns=None,
+    label_column=None,
+    add_categorical_stats=False,
+    pretrain_size=0.5,
+    val_size=0.1,
+    log_dir=None,
+    metrics_calculator=BaseMetricCalculator(),
+):
+    """
+    TODO: remove `recipe`. Add `model_lib` (sklearn, lgb), and common tree parameters.
+    """
+    if isinstance(df, str):
+        filepath = df
+        if path.isdir(filepath):
+            dfs = []
+            for fn in glob(path.join(filepath, "*.csv.*")):
+                dfs.append(df.read_csv(fn))
+            df = pd.concat(dfs)
+        elif path.isfile(filepath):
+            df = pd.read_csv(filepath)
+        else:
+            raise OSError(f"No such file: {filepath}")
+
+    feature_transformer = FeatureTransformer(
+        categorical_features=categorical_feature_columns,
+        numerical_features=numerical_feature_columns,
+        target=label_column,
+        output_dir=log_dir,
+        add_categorical_stats=add_categorical_stats,
+        preprocess_fn=preprocess_fn,
+    )
+
+    ds = DatasetBuilder(
+        local_dir_or_file=None,
+        log_dir=None,  # path.join(csd, "model_output"),
+        feature_transformer=feature_transformer,
+        sort_by_columns=sort_by_columns,
+        label_column=label_column,
+    )
+    ds.df = df
+    ds.preprocess()
+    assert ds.features.shape[0] > 10
+    train_ds, val_ds = ds.split(
+        pretrain_size=pretrain_size, val_size=val_size, shuffle=False
+    )
+
+    if recipe == "mape":
+        parameters = {
+            "boosting_type": "gbdt",
+            "metric": "mape",
+            "objective": "mape",
+            "learning_rate": 0.03,
+            "num_leaves": 255,
+            "min_data": 20,
+            "lambda_l1": 0.1,
+            "lambda_l2": 0.1,
+        }
+    elif recipe == "l2":
+        parameters = {
+            "boosting_type": "gbdt",
+            "metric": "l2",
+            "objective": "regression",
+            "learning_rate": 0.03,
+            "num_leaves": 31,
+            "min_data": 20,
+            # "lambda_l1": 0.001,
+            # "lambda_l2": 0.001,
+            "verbosity": 1,
+        }
+    elif recipe == "l2_rf":
+        parameters = {
+            "boosting_type": "rf",
+            "metric": "l2",
+            "objective": "regression",
+            "learning_rate": 0.03,
+            "min_data": 20,
+            "bagging_freq": 1,
+            "bagging_fraction": 0.65,
+            "feature_fraction": 0.6,
+            "num_leaves": 127,
+        }
+
+    if "sk_" in recipe:
+        model = SkTreeModel()
+        model.train(train_ds, val_ds)
+        # Eval
+        predictions_on_train = model.predict(train_ds)
+        predictions = model.predict(val_ds)
+    else:
+        print(parameters)
+        model = BoostedTreeModel(parameters=parameters, rounds=100)
+        model.train(train_ds, val_ds)
+        # Eval
+        predictions_on_train = model.predict(train_ds.data)
+        predictions = model.booster.predict(val_ds.data)
+
+    # Print out feature importances.
+    if "sk_" not in recipe:
+        print("Feature importances:")
+        total_imp = np.sum(
+            model.booster.feature_importance(importance_type="gain")
+        )
+        features_and_gains = zip(
+            model.booster.feature_name(),
+            model.booster.feature_importance(importance_type="gain"),
+        )
+        for f, i in sorted(features_and_gains, key=lambda x: -x[1]):
+            print(f, i / total_imp)
+
+    train_labels = train_ds.label
+    val_labels = val_ds.label
+    if hasattr(val_labels, "to_numpy"):
+        val_labels = val_labels.to_numpy()
+        train_labels = train_labels.to_numpy()
+    elif hasattr(val_labels, "values"):
+        val_labels = val_labels.values
+        train_labels = train_labels.values
+
+    mean_abs_err_train = mean_absolute_error(train_labels, predictions_on_train)
+    mean_abs_err = mean_absolute_error(val_labels, predictions)
+
+    def mael10(y_true, y_pred, epsilon=1):
+        return np.abs(
+            np.log10(np.maximum(epsilon, y_true))
+            - np.log10(np.maximum(epsilon, y_pred))
+        ).mean()
+
+    mean_abs_err_log10_train = mael10(train_labels, predictions_on_train)
+    mean_abs_err_log10 = mael10(val_labels, predictions)
+    print(
+        "MAE log10:",
+        mean_abs_err_log10,
+        ", on training set:",
+        mean_abs_err_log10_train,
+    )
+
+    def median_log10_error(y_true, y_pred, epsilon=1):
+        return np.median(
+            np.abs(
+                np.log10(np.maximum(epsilon, y_true))
+                - np.log10(np.maximum(epsilon, y_pred))
+            )
+        )
+
+    median_abs_error_log10_train = median_log10_error(
+        train_labels, predictions_on_train
+    )
+    median_abs_error_log10 = median_log10_error(val_labels, predictions)
+
+    print("Worst predictions:")
+    worst_predictions = sorted(
+        enumerate(np.abs(val_labels - predictions)), key=lambda x: -x[1]
+    )[:10]
+    #     print(worst_predictions)
+    for i, diff in worst_predictions:
+        print(ds.val_features.iloc[i].to_dict())
+        try:
+            print("actual:", val_labels[i], "predicted:", predictions[i])
+        except:
+            print(val_labels[:20])
+            print(predictions[:20])
+            raise
+        print("----------------------------\n")
+
+    try:
+        # TODO: need abstraction.
+        print()
+        print("-------------------------------------")
+        print()
+        print("Price:")
+        ds.val_features["SalePrice"] = val_labels
+        print(
+            ds.val_features.groupby("CategoryName")["SalePrice"].agg(
+                ["mean", "count"]
+            )
+        )
+        print("-------------------------------------")
+        print("Absolute Percentage Error: slicing and dicing")
+        ds.val_features["ape"] = (
+            np.abs(val_labels - predictions) / np.maximum(1, val_labels) * 100
+        )
+        error_by_category = ds.val_features.groupby("CategoryName")["ape"].agg(
+            ["mean", "count"]
+        )
+        print(error_by_category)
+        error_by_root_type = ds.val_features.groupby("RootType")["ape"].agg(
+            ["mean", "count"]
+        )
+        print(error_by_root_type)
+    except:
+        pass
+
+    print("Top level metrics ********************")
+    print(
+        "mean abs err:", mean_abs_err, ", on training set:", mean_abs_err_train
+    )
+    mape = mean_absolute_percentage_error(val_labels, predictions)
+    mape_train = mean_absolute_percentage_error(
+        train_labels, predictions_on_train
+    )
+    print("MAPE:", mape, ", on training set:", mape_train)
+    r2 = r2_score(val_labels, predictions)
+    r2_train = r2_score(train_labels, predictions_on_train)
+    print("R2:", r2, ", on training set:", r2_train)
+    print(
+        "Median log10 error",
+        median_abs_error_log10,
+        ", on training set",
+        median_abs_error_log10_train,
+    )
+    print("****************************************************\n")
+
+    if df_test is not None:
+        test_features = feature_transformer.transform(
+            df_test, include_target_column=True
+        )
+        test_labels = test_features[label_column]
+        test_features = test_features.drop(columns=[label_column])
+        print("test_features shape:", test_features.shape)
+        test_pred = model.predict(test_features)
+        print("")
+        print("On hold-out test set: ----------------------------------")
+        metrics_calculator.run(test_labels, test_pred)
+        metrics_calculator.print()
+        print("")
+        print(
+            "Baseline metrics for hold-out test set: ----------------------------------"
+        )
+        metrics_calculator.run(
+            test_labels, test_features.last_sale_price.fillna(100)
+        )
+        metrics_calculator.print()
+
+    return model
+
+
+if __name__ == "__main__":
+    print("training...")
+    train("data/collectors_universe_1.csv.gz")
