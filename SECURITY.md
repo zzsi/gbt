@@ -7,7 +7,7 @@
 
 Vulnerabilities can be reported by emailing core members:
 
-- kungfu.ai [zhangzhang.si@gmail.com](mailto:zhangzhang.si@gmail.com)
+- kungfu.ai [zz@kungfu.ai](mailto:zz@kungfu.ai)
 
 Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
 

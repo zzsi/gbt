@@ -94,6 +94,7 @@ download-poetry:
 install:
 	poetry lock -n
 	poetry install -n
+	poetry run pip install -U pip
 ifneq ($(NO_PRE_COMMIT), 1)
 	poetry run pre-commit install
 endif
