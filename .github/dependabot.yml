@@ -7,16 +7,16 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     allow:
-      - dependency-type: "all"
+      - dependency-type: "direct"
     commit-message:
       prefix: ":arrow_up:"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     allow:
-      - dependency-type: "all"
+      - dependency-type: "direct"
     commit-message:
       prefix: ":arrow_up:"

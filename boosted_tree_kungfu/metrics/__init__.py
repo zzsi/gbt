@@ -9,9 +9,7 @@ from sklearn.metrics import (
 
 def mean_absolute_percentage_error(y_true, y_pred, epsilon=1):
     y_true, y_pred = np.array(y_true), np.array(y_pred)
-    return (
-        np.mean(np.abs((y_true - y_pred) / np.maximum(epsilon, y_true))) * 100
-    )
+    return np.mean(np.abs((y_true - y_pred) / np.maximum(epsilon, y_true))) * 100
 
 
 def median_log10_error(y_true, y_pred, epsilon=1):

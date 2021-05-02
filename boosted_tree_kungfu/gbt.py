@@ -34,9 +34,7 @@ def default_hyperparameters(objective="regression"):
 
 
 class BoostedTreeModel:
-    def __init__(
-        self, parameters=None, rounds=None, patience=None, load_model=False
-    ):
+    def __init__(self, parameters=None, rounds=None, patience=None, load_model=False):
         """
         Args
         ========================
@@ -55,14 +53,10 @@ class BoostedTreeModel:
 
     def load_model(self, experiment_dir):
         model_path = path.join(experiment_dir, "lgb_classifier.txt")
-        feature_transformer_path = path.join(
-            experiment_dir, "feature_transformer.json"
-        )
+        feature_transformer_path = path.join(experiment_dir, "feature_transformer.json")
         if path.exists(model_path) and path.exists(feature_transformer_path):
             self.booster = lgb.Booster(model_file=model_path)
-            self.feature_transformer = FeatureTransformer(
-                output_dir=experiment_dir
-            )
+            self.feature_transformer = FeatureTransformer(output_dir=experiment_dir)
             return self.booster
         print("files not found")
         print("model path:", model_path)
@@ -73,7 +67,7 @@ class BoostedTreeModel:
         experiment_dirs = sorted(glob(path.join(model_dir, "*")))
         experiment_dirs = experiment_dirs[::-1]
         for experiment_dir in experiment_dirs:
-            if self.load(experiment_dir):
+            if self.load_model(experiment_dir):
                 return self.booster
         return None
 

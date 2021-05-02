@@ -1,5 +1,13 @@
 # boosted_tree_kungfu
 
+## Setup
+
+On Mac OS libomp is needed for `lightgbm`.
+
+```
+brew install libomp
+```
+
 <div align="center">
 
 [![Build status](https://github.com/zzsi/boosted_tree_kungfu/workflows/build/badge.svg?branch=master&event=push)](https://github.com/zzsi/boosted_tree_kungfu/actions?query=workflow%3Abuild)

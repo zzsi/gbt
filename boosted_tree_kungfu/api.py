@@ -15,7 +15,6 @@ from .metrics import (
     mean_log10_error,
     r2_score,
 )
-from .sk import SkTreeModel
 
 csd = path.dirname(path.realpath(__file__))
 
@@ -29,13 +28,9 @@ class BaseMetricCalculator:
 
     def run(self, y_true, y_pred, features=None):
         if self.task == "regression":
-            self.result = self.calculate_for_regression(
-                y_true, y_pred, features
-            )
+            self.result = self.calculate_for_regression(y_true, y_pred, features)
         elif self.task == "classification":
-            self.result = self.calculate_for_classification(
-                y_true, y_pred, features
-            )
+            self.result = self.calculate_for_classification(y_true, y_pred, features)
         return self.result
 
     def print(self):
@@ -43,7 +38,7 @@ class BaseMetricCalculator:
             value = self.result[k]
             print(f"{k.upper()}: {value}")
 
-    def calculate_for_regression(self, y_true, y_pred, features=None):
+    def calculate_for_regression(self, y_true, y_pred):
         r2 = r2_score(y_true, y_pred)
         mape = mean_absolute_percentage_error(y_true, y_pred)
         mae_log10 = mean_log10_error(y_true, y_pred)
@@ -143,29 +138,22 @@ def train(
             "num_leaves": 127,
         }
 
-    if "sk_" in recipe:
-        model = SkTreeModel()
-        model.train(train_ds, val_ds)
-        # Eval
-        predictions_on_train = model.predict(train_ds)
-        predictions = model.predict(val_ds)
-    else:
-        print(parameters)
-        model = BoostedTreeModel(parameters=parameters, rounds=100)
-        model.train(train_ds, val_ds)
-        # Eval
-        predictions_on_train = model.predict(train_ds.data)
-        predictions = model.booster.predict(val_ds.data)
+    print(parameters)
+    model = BoostedTreeModel(parameters=parameters, rounds=100)
+    model.train(train_ds, val_ds)
+    # Eval
+    predictions_on_train = model.predict(train_ds.data)
+    predictions = model.booster.predict(val_ds.data)
 
     # Print out feature importances.
     if "sk_" not in recipe:
         print("Feature importances:")
-        total_imp = np.sum(
-            model.booster.feature_importance(importance_type="gain")
-        )
-        features_and_gains = zip(
-            model.booster.feature_name(),
-            model.booster.feature_importance(importance_type="gain"),
+        total_imp = np.sum(model.booster.feature_importance(importance_type="gain"))
+        features_and_gains = list(
+            zip(
+                model.booster.feature_name(),
+                model.booster.feature_importance(importance_type="gain"),
+            )
         )
         for f, i in sorted(features_and_gains, key=lambda x: -x[1]):
             print(f, i / total_imp)
@@ -218,7 +206,7 @@ def train(
     for i, diff in worst_predictions:
         print(ds.val_features.iloc[i].to_dict())
         try:
-            print("actual:", val_labels[i], "predicted:", predictions[i])
+            print("actual:", val_labels[i], "predicted:", predictions[i], "diff:", diff)
         except:
             print(val_labels[:20])
             print(predictions[:20])
@@ -233,9 +221,7 @@ def train(
         print("Price:")
         ds.val_features["SalePrice"] = val_labels
         print(
-            ds.val_features.groupby("CategoryName")["SalePrice"].agg(
-                ["mean", "count"]
-            )
+            ds.val_features.groupby("CategoryName")["SalePrice"].agg(["mean", "count"])
         )
         print("-------------------------------------")
         print("Absolute Percentage Error: slicing and dicing")
@@ -250,17 +236,13 @@ def train(
             ["mean", "count"]
         )
         print(error_by_root_type)
-    except:
+    except Exception:
         pass
 
     print("Top level metrics ********************")
-    print(
-        "mean abs err:", mean_abs_err, ", on training set:", mean_abs_err_train
-    )
+    print("mean abs err:", mean_abs_err, ", on training set:", mean_abs_err_train)
     mape = mean_absolute_percentage_error(val_labels, predictions)
-    mape_train = mean_absolute_percentage_error(
-        train_labels, predictions_on_train
-    )
+    mape_train = mean_absolute_percentage_error(train_labels, predictions_on_train)
     print("MAPE:", mape, ", on training set:", mape_train)
     r2 = r2_score(val_labels, predictions)
     r2_train = r2_score(train_labels, predictions_on_train)
@@ -289,9 +271,7 @@ def train(
         print(
             "Baseline metrics for hold-out test set: ----------------------------------"
         )
-        metrics_calculator.run(
-            test_labels, test_features.last_sale_price.fillna(100)
-        )
+        metrics_calculator.run(test_labels, test_features.last_sale_price.fillna(100))
         metrics_calculator.print()
 
     return model

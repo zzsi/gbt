@@ -23,12 +23,14 @@ class DatasetBuilder:
         """
         Who uses DatasetBuilder?
 
-        TrainingSession. It asks the DatasetBuilder to load training data from a local file or folder, or a remote url.
+        TrainingSession. It asks the DatasetBuilder to load training data from
+        a local file or folder, or a remote url.
 
         What is specific to DatasetBuilder?
 
-        The complexity of connecting to different data sources is handled by DatasetBuilder. Sorting and train/val splitting
-        is also done inside DatasetBuilder. Splitting should be done before feature transforms to reduce risk of leakage. One
+        The complexity of connecting to different data sources is handled by DatasetBuilder.
+        Sorting and train/val splitting is also done inside DatasetBuilder. Splitting
+        should be done before feature transforms to reduce risk of leakage. One
         could argue that the splitting logic can be separated out into another class.
 
         What does DatasetBuilder NOT do?
@@ -36,7 +38,9 @@ class DatasetBuilder:
         Feature transformations should be done by a separate class, such as FeatureTransformer.
         This is because DatasetBuilder is typically used for training. But the logic of
         feature transformation and its trainable parameters (mean/var of numerical features,
-        vocabulary for the categoricals, fine-tuned nlp embedding model, autoencoder) are used for both training and prediction.
+        vocabulary for the categoricals, fine-tuned nlp embedding model, autoencoder) are
+        used for both training and prediction.
+
         Especially for real-time prediction, most logic in DatasetBuilder may not be relevant.
 
         feature_transformer is responsible for adding derivative features,
@@ -107,7 +111,7 @@ class DatasetBuilder:
             shuffle=shuffle,
         )
         if pretrain_size > 0:
-            pretrain_x, train_x, pretrain_y, train_y = train_test_split(
+            pretrain_x, train_x, _, train_y = train_test_split(
                 train_x,
                 train_y,
                 test_size=1 - pretrain_size,
@@ -138,10 +142,7 @@ class DatasetBuilder:
         )
         self.labels = self.features[self.label_column]
         self.features.drop(columns=[self.label_column], inplace=True)
-        # self.features = self.df[self.feature_transformer.feature_names + (self.sort_by_columns or [])]
-        self.feature_transformer.count_vectorize = (
-            False  # setting to true for training
-        )
+        self.feature_transformer.count_vectorize = False  # setting to true for training
         self.train_features = self.feature_transformer.transform(
             self.train_features, include_target_column=True
         )
@@ -158,9 +159,7 @@ class DatasetBuilder:
 
         if lgb_data:
             train_dataset = lgb.Dataset(
-                data=self.train_features[
-                    self.feature_transformer.feature_names
-                ],
+                data=self.train_features[self.feature_transformer.feature_names],
                 label=self.train_labels,
                 free_raw_data=False,
             )
@@ -174,9 +173,7 @@ class DatasetBuilder:
             train_dataset = Dataset(
                 features=self.train_features, target=self.train_labels
             )
-            val_dataset = Dataset(
-                features=self.val_features, target=self.val_labels
-            )
+            val_dataset = Dataset(features=self.val_features, target=self.val_labels)
         else:
             raise ValueError("Neither lgb_data or pd_data is True?")
 
