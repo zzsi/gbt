@@ -36,7 +36,7 @@ python = ">=3.6.1,<4.0"
 pip = ">=21.1"
 importlib_metadata = {version = "^4.0.1"}
 typer = {extras = ["all"], version = "^0.3.2"}
-rich = "^10.1.0"
+rich = "^10.11.0"
 scikit-learn = ">=0.22.0"
 pandas = ">=0.23.0"
 lightgbm = ">=2"
