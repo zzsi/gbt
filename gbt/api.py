@@ -56,11 +56,11 @@ def train(
     df_test=None,
     recipe="l2",
     num_classes=None,
+    label_column=None,
     categorical_feature_columns=None,
     numerical_feature_columns=None,
     preprocess_fn=None,
     sort_by_columns=None,
-    label_column=None,
     add_categorical_stats=False,
     pretrain_size=0,
     val_size=0.1,
@@ -100,7 +100,9 @@ def train(
     )
     ds.df = df
     ds.preprocess()
-    assert ds.features.shape[0] > 10
+    if ds.features.shape[0] <= 10:
+        import warnings
+        warnings.warn(f"Too few samples: {ds.features.shape[0]}. Training may not converge.")
     train_ds, val_ds = ds.split(
         pretrain_size=pretrain_size, val_size=val_size, shuffle=False
     )
@@ -163,6 +165,8 @@ def train(
             "lambda_l2": 0.001,
             "num_class": num_classes,
         }
+    else:
+        raise ValueError(f"Unknown recipe: {recipe}. Supported: mape, l2, l2_rf, binary, multiclass")
 
     print(parameters)
     model = LightGBMModel(parameters=parameters, rounds=100)
