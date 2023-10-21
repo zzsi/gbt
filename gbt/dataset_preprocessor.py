@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from .dataset import Dataset
 
 
-class DatasetBuilder:
+class DataPreprocessor:
     def __init__(
         self,
         local_dir_or_file="data/csv",
@@ -21,31 +21,29 @@ class DatasetBuilder:
         label_column="label",
     ):
         """
-        Who uses DatasetBuilder?
+        DataPreprocessor is a class to preprocess the data for training.
+        It handles the following tasks:
+        - read the data from local file or directory.
+        - sort the data by columns.
+        - split the data into train/val.
+        - feature engineering.
+        - save the feature transformer.
 
-        TrainingSession. It asks the DatasetBuilder to load training data from
-        a local file or folder, or a remote url.
 
-        What is specific to DatasetBuilder?
+        Args:
+            local_dir_or_file: str, local dir or file path.
+            df: pd.DataFrame, if not None, will ignore local_dir_or_file.
+            log_dir: str, path to the directory to save the feature transformer.
+            nrows: int, number of rows to read from the csv file.
+            feature_transformer: FeatureTransformer, if None, will create a default one.
+            sort_by_columns: list of str, columns to sort by.
+            label_column: str, name of the label column.
 
-        The complexity of connecting to different data sources is handled by DatasetBuilder.
-        Sorting and train/val splitting is also done inside DatasetBuilder. Splitting
-        should be done before feature transforms to reduce risk of leakage. One
-        could argue that the splitting logic can be separated out into another class.
+        Returns:
+            DataPreprocessor
 
-        What does DatasetBuilder NOT do?
 
-        Feature transformations should be done by a separate class, such as FeatureTransformer.
-        This is because DatasetBuilder is typically used for training. But the logic of
-        feature transformation and its trainable parameters (mean/var of numerical features,
-        vocabulary for the categoricals, fine-tuned nlp embedding model, autoencoder) are
-        used for both training and prediction.
 
-        Especially for real-time prediction, most logic in DatasetBuilder may not be relevant.
-
-        feature_transformer is responsible for adding derivative features,
-            doing data augmentations (e.g. random cropping), and preprocessing/postprocessing
-            that is tailored to specific datasets.
         """
         self.log_dir = log_dir
         if log_dir is not None:
@@ -110,7 +108,7 @@ class DatasetBuilder:
             random_state=random_state,
             shuffle=shuffle,
         )
-        if pretrain_size > 0:
+        if (pretrain_size or 0) > 0:
             pretrain_x, train_x, _, train_y = train_test_split(
                 train_x,
                 train_y,

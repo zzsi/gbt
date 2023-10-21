@@ -311,4 +311,4 @@ output-format=colorized
 [TYPECHECK]
 extension-pkg-whitelist=cv2
 generated-members=numpy.*
-ignored-modules=beeswax,boto3
+ignored-modules=boto3

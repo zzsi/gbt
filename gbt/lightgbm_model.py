@@ -52,8 +52,6 @@ class LightGBMModel:
             train_set=train_dataset,
             valid_sets=val_dataset,
             num_boost_round=self.rounds,
-            early_stopping_rounds=self.patience,
-            verbose_eval=False,
         )
 
     def transform(self, X):

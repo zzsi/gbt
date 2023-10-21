@@ -6,7 +6,7 @@ from os import path
 import numpy as np
 import pandas as pd
 
-from .dataset_builder import DatasetBuilder
+from .dataset_preprocessor import DataPreprocessor
 from .feature_transformer import FeatureTransformer
 from .lightgbm_model import LightGBMModel
 from .metrics import (
@@ -16,39 +16,10 @@ from .metrics import (
     r2_score,
     accuracy_score,
     roc_auc_score,
+    BaseMetricCalculator,
 )
 
 csd = path.dirname(path.realpath(__file__))
-
-
-class BaseMetricCalculator:
-    def __init__(self, task="regression"):
-        """
-        task: str, 'regression' or 'classification'.
-        """
-        self.task = task
-
-    def run(self, y_true, y_pred, features=None):
-        if self.task == "regression":
-            self.result = self.calculate_for_regression(y_true, y_pred, features)
-        elif self.task == "classification":
-            self.result = self.calculate_for_classification(y_true, y_pred, features)
-        return self.result
-
-    def print(self):
-        for k in ["r2", "mape", "mae", "mae_log10"]:
-            value = self.result[k]
-            print(f"{k.upper()}: {value}")
-
-    def calculate_for_regression(self, y_true, y_pred):
-        r2 = r2_score(y_true, y_pred)
-        mape = mean_absolute_percentage_error(y_true, y_pred)
-        mae_log10 = mean_log10_error(y_true, y_pred)
-        mae = mean_absolute_error(y_true, y_pred)
-        return {"r2": r2, "mape": mape, "mae": mae, "mae_log10": mae_log10}
-
-    def calculate_for_classification(self, y_true, y_pred, features=None):
-        raise NotImplementedError
 
 
 def train(
@@ -91,7 +62,7 @@ def train(
         preprocess_fn=preprocess_fn,
     )
 
-    ds = DatasetBuilder(
+    ds = DataPreprocessor(
         local_dir_or_file=None,
         log_dir=None,  # path.join(csd, "model_output"),
         feature_transformer=feature_transformer,
@@ -102,7 +73,10 @@ def train(
     ds.preprocess()
     if ds.features.shape[0] <= 10:
         import warnings
-        warnings.warn(f"Too few samples: {ds.features.shape[0]}. Training may not converge.")
+
+        warnings.warn(
+            f"Too few samples: {ds.features.shape[0]}. Training may not converge."
+        )
     train_ds, val_ds = ds.split(
         pretrain_size=pretrain_size, val_size=val_size, shuffle=False
     )
@@ -166,7 +140,9 @@ def train(
             "num_class": num_classes,
         }
     else:
-        raise ValueError(f"Unknown recipe: {recipe}. Supported: mape, l2, l2_rf, binary, multiclass")
+        raise ValueError(
+            f"Unknown recipe: {recipe}. Supported: mape, l2, l2_rf, binary, multiclass"
+        )
 
     print(parameters)
     model = LightGBMModel(parameters=parameters, rounds=100)
@@ -240,7 +216,14 @@ def train(
         for i, diff in worst_predictions:
             print(ds.val_features.iloc[i].to_dict())
             try:
-                print("actual:", val_labels[i], "predicted:", predictions[i], "diff:", diff)
+                print(
+                    "actual:",
+                    val_labels[i],
+                    "predicted:",
+                    predictions[i],
+                    "diff:",
+                    diff,
+                )
             except:
                 print(val_labels[:20])
                 print(predictions[:20])
@@ -280,14 +263,18 @@ def train(
         predicted_labels_on_train = predictions_on_train > 0.5
         predicted_labels_on_val = predictions > 0.5
         print("Binary ---------------")
-        print("Train Accuracy:", accuracy_score(train_labels, predicted_labels_on_train))
+        print(
+            "Train Accuracy:", accuracy_score(train_labels, predicted_labels_on_train)
+        )
         print("Train AUC:", roc_auc_score(train_labels, predictions_on_train))
         print("Val Accuracy:", accuracy_score(val_labels, predicted_labels_on_val))
         print("Val AUC:", roc_auc_score(val_labels, predictions))
     if recipe == "multiclass":
         predicted_labels_on_train = np.argmax(predictions_on_train, axis=1)
         print(predicted_labels_on_train)
-        print("Train Accuracy:", accuracy_score(train_labels, predicted_labels_on_train))
+        print(
+            "Train Accuracy:", accuracy_score(train_labels, predicted_labels_on_train)
+        )
         predicted_labels_on_val = np.argmax(predictions, axis=1)
         print("Val Accuracy:", accuracy_score(val_labels, predicted_labels_on_val))
         # print("AUC:", roc_auc_score(train_labels, predicted_labels_on_train))
@@ -301,7 +288,7 @@ def train(
         r2 = r2_score(val_labels, predictions)
         r2_train = r2_score(train_labels, predictions_on_train)
         print("R2:", r2, ", on training set:", r2_train)
-        
+
         print(
             "Median log10 error",
             median_abs_error_log10,
@@ -323,12 +310,6 @@ def train(
         print("")
         print("On hold-out test set: ----------------------------------")
         metrics_calculator.run(test_labels, test_pred)
-        metrics_calculator.print()
-        print("")
-        print(
-            "Baseline metrics for hold-out test set: ----------------------------------"
-        )
-        metrics_calculator.run(test_labels, test_features.last_sale_price.fillna(100))
         metrics_calculator.print()
 
     return model

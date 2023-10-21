@@ -2,14 +2,13 @@ from typing import List, Optional
 
 import json
 from os import path
-
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 
 
 class FeatureTransformer:
-
     """A trainable transformer which preprocess numerical
     and categorical features.
 
@@ -64,6 +63,40 @@ class FeatureTransformer:
         self.count_vectorize = count_vectorize
         self.apply_vectorize = apply_vectorize
         self.features = []
+
+    @classmethod
+    def from_json(cls, json_path: str) -> "FeatureTransformer":
+        """
+        Load a FeatureTransformer from a json file.
+
+        Args:
+            json_path (str): Path to the json file or the directory that has a feature_transformer.json.
+        """
+        json_path = Path(json_path)
+        if not json_path.exists():
+            raise FileNotFoundError(f"File or directory {json_path} does not exist.")
+        if json_path.is_dir():
+            json_path = json_path / "feature_transformer.json"
+        with open(str(json_path)) as f:
+            obj = json.load(f)
+            parent_dir = json_path.parent
+            feature_transfomer = cls(
+                output_dir=str(parent_dir),
+                target=obj["target"],
+                categorical_features=obj["categorical_features"],
+                numerical_features=obj["numerical_features"],
+                add_categorical_stats=obj["add_categorical_stats"],
+                order_categoricals=obj.get("order_categoricals", False),
+                drop_categoricals=obj.get("drop_categoricals", False),
+                # TODO: not being able save preprocess_fn, postprocess_fn can be problem
+            )
+            feature_transfomer.cats_encoder = {}
+            for feature_name, vocab in feature_transfomer.cats.items():
+                feature_transfomer.cats_encoder[feature_name] = {
+                    value: i for i, value in enumerate(vocab)
+                }
+            print(f"Feature transformer loaded from {feature_transfomer.output_path}")
+            return feature_transfomer
 
     def fit(self, df):
         if self.preprocess_fn is not None and callable(self.preprocess_fn):
@@ -234,6 +267,9 @@ class FeatureTransformer:
             print(f"Feature transformer saved to {self.output_path}")
 
     def load(self):
+        """
+        Obsolete. Use from_json instead.
+        """
         with open(self.output_path) as f:
             obj = json.load(f)
             for f in [

@@ -6,10 +6,14 @@ with open("requirements.txt") as f:
 with open("README.md") as f:
     long_description = f.read()
 
+with open("gbt/version.py") as f:
+    version_text = f.read()
+    __version__ = version_text.split('"')[1]
+
 setup(
     name="gbt",
-    version="0.1",
-    description="A gradient boosted tree library with minimal coding required.",
+    version=__version__,
+    description="A gradient boosted tree library with automatic feature engineering.",
     url="https://github.com/zzsi/gbt",
     author="Zhangzhang Si",
     author_email="zhangzhang.si@gmail.com",
