@@ -46,7 +46,7 @@ def train(
         if path.isdir(filepath):
             dfs = []
             for fn in glob(path.join(filepath, "*.csv.*")):
-                dfs.append(df.read_csv(fn))
+                dfs.append(pd.read_csv(fn))
             df = pd.concat(dfs)
         elif path.isfile(filepath):
             df = pd.read_csv(filepath)
