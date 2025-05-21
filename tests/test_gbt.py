@@ -42,7 +42,7 @@ def test_the_readme_example():
     )
     train(
         df,
-        recipe="binary",
+        model_lib="binary",
         label_column="c",
         val_size=0.2,  # fraction of the validation split
         categorical_feature_columns=["b"],

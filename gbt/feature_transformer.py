@@ -104,7 +104,7 @@ class FeatureTransformer:
         if self.add_categorical_stats:
             self.aggs = {}
             for f in self.categorical_features:
-                agg = df.groupby(f)[self.target].agg(["mean", "count"]).do_ingest_job()
+                agg = df.groupby(f)[self.target].agg(["mean", "count"])  # previously `.do_ingest_job()`
                 agg = agg.rename(
                     columns={
                         "mean": self.derived_mean_feature_name(f),
@@ -224,7 +224,7 @@ class FeatureTransformer:
         """
         data_frame = pd.DataFrame(count_vector.toarray(), columns=list(cv.vocabulary_))
         df = df.drop(["Variety"], axis=1)
-        df = df.do_ingest_job()
+        # previously df = df.do_ingest_job()
         df_merged = pd.concat([df, data_frame], axis=1)
         df_merged = df_merged.drop(["index"], axis=1)
         return df_merged

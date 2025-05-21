@@ -181,8 +181,3 @@ class DataPreprocessor:
 
         return train_dataset, val_dataset
 
-    def get_embedding_data(self, columns):
-        return self.df[columns]
-
-    def lgb_dataset(self):
-        return lgb.Dataset(self.features, label=self.labels)
