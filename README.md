@@ -39,7 +39,7 @@ class DatasetBuilder:
         return train_df
     
     def testing_dataset(self):
-        return train_df  # TODO: use an actual test dataset
+        return train_df  # replace with a real test dataset in practice
 
 TrainingPipeline(
     params_preset="binary",  # one of mape, l2, binary, multiclass

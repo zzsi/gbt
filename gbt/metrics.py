@@ -45,9 +45,14 @@ class BaseMetricCalculator:
         return self.result
 
     def print(self):
-        for k in ["r2", "mape", "mae", "mae_log10"]:
-            value = self.result[k]
-            print(f"{k.upper()}: {value}")
+        if self.task == "classification":
+            for k in ["accuracy", "auc"]:
+                value = self.result[k]
+                print(f"{k.upper()}: {value}")
+        else:
+            for k in ["r2", "mape", "mae", "mae_log10"]:
+                value = self.result[k]
+                print(f"{k.upper()}: {value}")
 
     def calculate_for_regression(self, y_true, y_pred, features=None):
         r2 = r2_score(y_true, y_pred)
@@ -57,4 +62,14 @@ class BaseMetricCalculator:
         return {"r2": r2, "mape": mape, "mae": mae, "mae_log10": mae_log10}
 
     def calculate_for_classification(self, y_true, y_pred, features=None):
-        raise NotImplementedError
+        """Return accuracy and AUC for classification tasks."""
+        y_true = np.array(y_true)
+        y_pred = np.array(y_pred)
+        if y_pred.ndim == 1 or y_pred.shape[1] == 1:
+            pred_labels = (y_pred > 0.5).astype(int)
+            auc = roc_auc_score(y_true, y_pred)
+        else:
+            pred_labels = np.argmax(y_pred, axis=1)
+            auc = roc_auc_score(y_true, y_pred, multi_class="ovo")
+        acc = accuracy_score(y_true, pred_labels)
+        return {"accuracy": acc, "auc": auc}

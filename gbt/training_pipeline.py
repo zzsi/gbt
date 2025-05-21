@@ -8,14 +8,7 @@ from .params_preset import ParamsPreset, get_preset_params
 from .dataset_preprocessor import DataPreprocessor
 from .feature_transformer import FeatureTransformer
 from .lightgbm_model import LightGBMModel
-from .metrics import (
-    mean_absolute_error,
-    mean_absolute_percentage_error,
-    r2_score,
-    roc_auc_score,
-    accuracy_score,
-    BaseMetricCalculator,
-)
+from .metrics import BaseMetricCalculator
 
 
 @dataclass
@@ -64,15 +57,21 @@ class TrainingPipeline:
             val_labels = val_labels.values
             train_labels = train_labels.values
 
-        self._print_regression_metrics(
-            predictions_on_train, predictions, train_labels, val_labels
-        )
-        self._print_classification_metrics(
-            predictions_on_train, predictions, train_labels, val_labels
-        )
-        self._print_regression_metrics(
-            predictions_on_train, predictions, train_labels, val_labels
-        )
+        if self.params_preset in (
+            ParamsPreset.BINARY_CLASSIFICATION,
+            ParamsPreset.MULTICLASS_CLASSIFICATION,
+        ):
+            self.metrics_calculator.task = "classification"
+        else:
+            self.metrics_calculator.task = "regression"
+
+        print("Training metrics:")
+        self.metrics_calculator.run(train_labels, predictions_on_train)
+        self.metrics_calculator.print()
+        print("\nValidation metrics:")
+        self.metrics_calculator.run(val_labels, predictions)
+        self.metrics_calculator.print()
+
         if hasattr(dataset_builder, "testing_dataset"):
             self._evaluate_on_test_data(
                 model, feature_transformer, dataset_builder.testing_dataset()
@@ -87,85 +86,6 @@ class TrainingPipeline:
     def data_is_compatible(self, dataset_builder):
         return True
 
-    def _print_regression_metrics(
-        self, predictions_on_train, predictions, train_labels, val_labels
-    ):
-        try:
-            mean_abs_err_train = mean_absolute_error(train_labels, predictions_on_train)
-            mean_abs_err = mean_absolute_error(val_labels, predictions)
-
-            def mael10(y_true, y_pred, epsilon=1):
-                return np.abs(
-                    np.log10(np.maximum(epsilon, y_true))
-                    - np.log10(np.maximum(epsilon, y_pred))
-                ).mean()
-
-            mean_abs_err_log10_train = mael10(train_labels, predictions_on_train)
-            mean_abs_err_log10 = mael10(val_labels, predictions)
-            print(
-                "MAE log10:",
-                mean_abs_err_log10,
-                ", on training set:",
-                mean_abs_err_log10_train,
-            )
-        except:
-            pass
-
-        try:
-            print("Top level metrics ********************")
-            print(
-                "mean abs err:", mean_abs_err, ", on training set:", mean_abs_err_train
-            )
-            mape = mean_absolute_percentage_error(val_labels, predictions)
-            mape_train = mean_absolute_percentage_error(
-                train_labels, predictions_on_train
-            )
-            print("MAPE:", mape, ", on training set:", mape_train)
-            r2 = r2_score(val_labels, predictions)
-            r2_train = r2_score(train_labels, predictions_on_train)
-            print("R2:", r2, ", on training set:", r2_train)
-            print("****************************************************\n")
-        except:
-            pass
-
-        def median_log10_error(y_true, y_pred, epsilon=1):
-            return np.median(
-                np.abs(
-                    np.log10(np.maximum(epsilon, y_true))
-                    - np.log10(np.maximum(epsilon, y_pred))
-                )
-            )
-
-        try:
-            median_abs_error_log10_train = median_log10_error(
-                train_labels, predictions_on_train
-            )
-            median_abs_error_log10 = median_log10_error(val_labels, predictions)
-
-            print("Worst predictions:")
-            worst_predictions = sorted(
-                enumerate(np.abs(val_labels - predictions)), key=lambda x: -x[1]
-            )[:10]
-            ds = self.dataset_builder
-            for i, diff in worst_predictions:
-                print(ds.val_features.iloc[i].to_dict())
-                try:
-                    print(
-                        "actual:",
-                        val_labels[i],
-                        "predicted:",
-                        predictions[i],
-                        "diff:",
-                        diff,
-                    )
-                except:
-                    print(val_labels[:20])
-                    print(predictions[:20])
-                    raise
-                print("----------------------------\n")
-        except:
-            pass
-
     def _print_feature_importances(self, model):
         # Print out feature importances.
         print("Feature importances:")
@@ -178,31 +98,6 @@ class TrainingPipeline:
         )
         for f, i in sorted(features_and_gains, key=lambda x: -x[1]):
             print(f, i / total_imp)
-
-    def _print_classification_metrics(
-        self, predictions_on_train, predictions, train_labels, val_labels
-    ):
-        if self.params_preset == ParamsPreset.BINARY_CLASSIFICATION:
-            # print("Accuracy:", accuracy_score(train_labels, predictions_on_train))
-            predicted_labels_on_train = predictions_on_train > 0.5
-            predicted_labels_on_val = predictions > 0.5
-            print("Binary ---------------")
-            print(
-                "Train Accuracy:",
-                accuracy_score(train_labels, predicted_labels_on_train),
-            )
-            print("Train AUC:", roc_auc_score(train_labels, predictions_on_train))
-            print("Val Accuracy:", accuracy_score(val_labels, predicted_labels_on_val))
-            print("Val AUC:", roc_auc_score(val_labels, predictions))
-        if self.params_preset == ParamsPreset.MULTICLASS_CLASSIFICATION:
-            predicted_labels_on_train = np.argmax(predictions_on_train, axis=1)
-            print(predicted_labels_on_train)
-            print(
-                "Train Accuracy:",
-                accuracy_score(train_labels, predicted_labels_on_train),
-            )
-            predicted_labels_on_val = np.argmax(predictions, axis=1)
-            print("Val Accuracy:", accuracy_score(val_labels, predicted_labels_on_val))
 
     def _evaluate_on_test_data(self, model, feature_transformer, df_test):
         if df_test is not None:
@@ -289,28 +184,3 @@ class TrainingPipeline:
         return train_ds, val_ds
 
 
-if __name__ == "__main__":
-
-    class DataPreprocessor:
-        def training_dataset(self):
-            df = pd.DataFrame(
-                {
-                    "a": [1, 2, 3, 4, 5, 6, 7],
-                    "b": ["a", "b", "c", None, "e", "f", "g"],
-                    "c": [1, 0, 1, 1, 0, 0, 1],
-                    "some_other_column": [0, 0, None, None, None, 3, 3],
-                }
-            )
-            return df
-
-        def testing_dataset(self):
-            return self.training_dataset()
-
-    TrainingPipeline(
-        params_preset="binary",  # one of mape, l2, binary, multiclass
-        params_override={"num_leaves": 10},
-        label_column="c",
-        val_size=0.2,  # fraction of the validation split
-        categorical_feature_columns=["b"],
-        numerical_feature_columns=["a"],
-    ).fit(DataPreprocessor())
