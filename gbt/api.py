@@ -32,10 +32,10 @@ def train(
     add_categorical_stats: bool = False,
     pretrain_size: float = 0,
     val_size: float = 0.1,
-    log_dir: str | None = None,
-    metrics_calculator: BaseMetricCalculator | None = None,
-    params_override: dict | None = None,
-    early_stopping_rounds: int | None = None,
+    log_dir: Optional[str] = None,
+    metrics_calculator: Optional[BaseMetricCalculator] = None,
+    params_override: Optional[dict] = None,
+    early_stopping_rounds: Optional[int] = None,
     num_boost_round: int = 30,
 ):
     """Train a model using :class:`TrainingPipeline`.
