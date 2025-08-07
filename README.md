@@ -59,5 +59,27 @@ The output includes:
 - a feature transformer state file (in JSON)
 
 ## Using the model to predict on new data
+Once a model is trained, the returned pipeline can be used for
+prediction on any dataframe with the same schema.
 
-Under construction.
+```python
+# Train and save artifacts to "my_model" directory
+from gbt import train, load
+
+pipeline = train(
+    df,
+    model_lib="binary",
+    label_column="c",
+    categorical_feature_columns=["b"],
+    numerical_feature_columns=["a"],
+    val_size=0.2,
+    log_dir="my_model",
+)
+
+new_df = pd.DataFrame({"a": [8, 9], "b": ["h", "i"]})
+predictions = pipeline.predict(new_df)
+
+# Later on, reload the pipeline for inference
+loaded_pipeline = load("my_model")
+predictions = loaded_pipeline.predict(new_df)
+```

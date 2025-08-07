@@ -1,8 +1,7 @@
 from os import path
 
 import pandas as pd
-from gbt import train
-from gbt import TrainingPipeline
+from gbt import train, load, TrainingPipeline
 
 
 csd = path.dirname(path.realpath(__file__))
@@ -48,6 +47,49 @@ def test_the_readme_example():
         categorical_feature_columns=["b"],
         numerical_feature_columns=["a"],
     )
+
+
+def test_predict_after_training():
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": ["a", "b", "c"],
+            "c": [1, 0, 1],
+        }
+    )
+    pipeline = train(
+        df,
+        model_lib="binary",
+        label_column="c",
+        val_size=0.2,
+        categorical_feature_columns=["b"],
+        numerical_feature_columns=["a"],
+    )
+    preds = pipeline.predict(df)
+    assert len(preds) == len(df)
+
+
+def test_pipeline_can_save_and_load(tmp_path):
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": ["a", "b", "c"],
+            "c": [1, 0, 1],
+        }
+    )
+    train(
+        df,
+        model_lib="binary",
+        label_column="c",
+        val_size=0.2,
+        categorical_feature_columns=["b"],
+        numerical_feature_columns=["a"],
+        log_dir=str(tmp_path),
+    )
+    loaded = load(str(tmp_path))
+    new_df = df.drop(columns=["c"])
+    preds = loaded.predict(new_df)
+    assert len(preds) == len(new_df)
 
 
 def test_the_readme_example_with_pipeline():

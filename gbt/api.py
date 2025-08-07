@@ -63,3 +63,12 @@ def train(
     pipeline.fit(dataset_builder)
     return pipeline
 
+
+def load(log_dir: str) -> TrainingPipeline:
+    """Load a trained pipeline from ``log_dir``.
+
+    Parameters:
+        log_dir: Directory where the training artifacts were saved.
+    """
+    return TrainingPipeline.load(log_dir)
+
