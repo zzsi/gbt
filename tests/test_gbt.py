@@ -1,7 +1,7 @@
 from os import path
 
 import pandas as pd
-from gbt import train, load, TrainingPipeline
+from gbt import train, load, TrainingPipeline, GBTModel
 
 
 csd = path.dirname(path.realpath(__file__))
@@ -116,3 +116,59 @@ def test_the_readme_example_with_pipeline():
         categorical_feature_columns=["b"],
         numerical_feature_columns=["a"],
     ).fit(DatasetBuilder())
+
+
+def test_gbt_model_creation_and_prediction():
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": ["a", "b", "c"],
+            "c": [1, 0, 1],
+        }
+    )
+    # Train using pipeline
+    pipeline = train(
+        df,
+        model_lib="binary",
+        label_column="c",
+        val_size=0.2,
+        categorical_feature_columns=["b"],
+        numerical_feature_columns=["a"],
+    )
+    
+    # Create GBTModel from pipeline
+    model = pipeline.create_model()
+    assert isinstance(model, GBTModel)
+    
+    # Test prediction works
+    preds = model.predict(df)
+    assert len(preds) == len(df)
+
+
+def test_load_returns_gbt_model(tmp_path):
+    df = pd.DataFrame(
+        {
+            "a": [1, 2, 3],
+            "b": ["a", "b", "c"],
+            "c": [1, 0, 1],
+        }
+    )
+    # Train and save
+    train(
+        df,
+        model_lib="binary",
+        label_column="c",
+        val_size=0.2,
+        categorical_feature_columns=["b"],
+        numerical_feature_columns=["a"],
+        log_dir=str(tmp_path),
+    )
+    
+    # Load should return GBTModel now
+    loaded_model = load(str(tmp_path))
+    assert isinstance(loaded_model, GBTModel)
+    
+    # Test prediction
+    new_df = df.drop(columns=["c"])
+    preds = loaded_model.predict(new_df)
+    assert len(preds) == len(new_df)

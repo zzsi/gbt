@@ -9,6 +9,7 @@ from .dataset_preprocessor import DataPreprocessor
 from .feature_transformer import FeatureTransformer
 from .lightgbm_model import LightGBMModel
 from .metrics import BaseMetricCalculator
+from .model import GBTModel
 
 
 @dataclass
@@ -28,6 +29,7 @@ class TrainingPipeline:
     add_categorical_stats: bool = False
     preprocess_fn: Callable = None
     early_stopping_rounds: int = None
+    verbose: bool = True
 
     metrics_calculator = BaseMetricCalculator()
     model: LightGBMModel = field(init=False, default=None)
@@ -40,8 +42,9 @@ class TrainingPipeline:
         feature_transformer = self._create_feature_transformer()
         train_ds, val_ds = self._preprocess_and_split_data(df, feature_transformer)
         parameters = self._get_parameters()
-        print("Parameters:")
-        print(parameters)
+        if self.verbose:
+            print("Parameters:")
+            print(parameters)
         model = LightGBMModel(parameters=parameters, rounds=self.num_boost_round)
         model.train(train_ds, val_ds)
         self.model = model
@@ -57,6 +60,7 @@ class TrainingPipeline:
 
         train_labels = train_ds.label
         val_labels = val_ds.label
+        # Convert to numpy arrays if needed
         if hasattr(val_labels, "to_numpy"):
             val_labels = val_labels.to_numpy()
             train_labels = train_labels.to_numpy()
@@ -72,12 +76,15 @@ class TrainingPipeline:
         else:
             self.metrics_calculator.task = "regression"
 
-        print("Training metrics:")
-        self.metrics_calculator.run(train_labels, predictions_on_train)
-        self.metrics_calculator.print()
-        print("\nValidation metrics:")
-        self.metrics_calculator.run(val_labels, predictions)
-        self.metrics_calculator.print()
+        if self.verbose:
+            print("Training metrics:")
+            self.metrics_calculator.run(train_labels, predictions_on_train)
+            self.metrics_calculator.print()
+            print("\nValidation metrics:")
+            self.metrics_calculator.run(val_labels, predictions)
+            self.metrics_calculator.print()
+        else:
+            self.metrics_calculator.run(val_labels, predictions)
 
         if hasattr(dataset_builder, "testing_dataset"):
             self._evaluate_on_test_data(
@@ -95,9 +102,19 @@ class TrainingPipeline:
         """
         if self.model is None or self.feature_transformer is None:
             raise ValueError("Model is not trained. Call `fit` first.")
-        df = self._load_training_dataframe(df)
-        features = self.feature_transformer.transform(df)
-        return self.model.predict(features, **kwargs)
+        # Use GBTModel for prediction
+        gbt_model = self.create_model()
+        return gbt_model.predict(df, **kwargs)
+    
+    def create_model(self) -> GBTModel:
+        """Create a GBTModel for inference.
+        
+        Returns:
+            GBTModel instance containing booster and feature transformer
+        """
+        if self.model is None or self.feature_transformer is None:
+            raise ValueError("Model is not trained. Call `fit` first.")
+        return GBTModel(self.model.booster, self.feature_transformer)
 
     @classmethod
     def load(cls, model_dir: str) -> "TrainingPipeline":
@@ -110,18 +127,23 @@ class TrainingPipeline:
         Returns:
             A :class:`TrainingPipeline` ready for :meth:`predict`.
         """
-        model = LightGBMModel()
-        if model.load_model(model_dir) is None:
-            raise FileNotFoundError(f"No model artifacts found in {model_dir}")
-        ft = model.feature_transformer
+        # Load using GBTModel, then create pipeline wrapper for backward compatibility
+        gbt_model = GBTModel.load(model_dir)
+        ft = gbt_model.feature_transformer
+        
+        # Create a pipeline with the loaded model
         pipeline = cls(
             categorical_feature_columns=ft.categorical_features,
             numerical_feature_columns=ft.numerical_features,
             label_column=ft.target,
             log_dir=model_dir,
         )
-        pipeline.model = model
+        
+        # Set the loaded components
+        pipeline.model = LightGBMModel()
+        pipeline.model.booster = gbt_model.booster
         pipeline.feature_transformer = ft
+        
         return pipeline
 
     def _raise_error_if_data_not_compatible(self, dataset_builder):
@@ -144,7 +166,10 @@ class TrainingPipeline:
             )
         )
         for f, i in sorted(features_and_gains, key=lambda x: -x[1]):
-            print(f, i / total_imp)
+            if total_imp > 0:
+                print(f, i / total_imp)
+            else:
+                print(f, 0)
 
     def _evaluate_on_test_data(self, model, feature_transformer, df_test):
         if df_test is not None:
@@ -153,16 +178,15 @@ class TrainingPipeline:
             )
             test_labels = test_features[self.label_column]
             test_features = test_features.drop(columns=[self.label_column])
-            print("test_features shape:", test_features.shape)
+            if self.verbose:
+                print("test_features shape:", test_features.shape)
             test_pred = model.predict(test_features)
-            print("")
-            print("On hold-out test set: ----------------------------------")
-            self.metrics_calculator.run(test_labels, test_pred)
-            self.metrics_calculator.print()
-            print("")
-            print(
-                "Baseline metrics for hold-out test set: ----------------------------------"
-            )
+            if self.verbose:
+                print("")
+                print("On hold-out test set: ----------------------------------")
+                self.metrics_calculator.run(test_labels, test_pred)
+                self.metrics_calculator.print()
+                print("")
 
     def _get_parameters(self):
         params = get_preset_params(self.params_preset)
@@ -170,7 +194,8 @@ class TrainingPipeline:
             params["early_stopping_rounds"] = self.early_stopping_rounds
         # Override preset params with user params.
         if self.params_override is not None:
-            print(f"Overriding preset params with user params: {self.params_override}.")
+            if self.verbose:
+                print(f"Overriding preset params with user params: {self.params_override}.")
             for k, v in self.params_override.items():
                 params[k] = v
         return params
@@ -210,7 +235,6 @@ class TrainingPipeline:
         df: pd.DataFrame,
         feature_transformer: FeatureTransformer,
     ):
-        # This class needs renamed to DataPreprocessor.
         ds = DataPreprocessor(
             local_dir_or_file=None,
             log_dir=self.log_dir,
