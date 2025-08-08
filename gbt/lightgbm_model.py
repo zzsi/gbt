@@ -29,7 +29,7 @@ class LightGBMModel:
         feature_transformer_path = path.join(experiment_dir, "feature_transformer.json")
         if path.exists(model_path) and path.exists(feature_transformer_path):
             self.booster = lgb.Booster(model_file=model_path)
-            self.feature_transformer = FeatureTransformer(output_dir=experiment_dir)
+            self.feature_transformer = FeatureTransformer.from_json(experiment_dir)
             return self.booster
         print("files not found")
         print("model path:", model_path)

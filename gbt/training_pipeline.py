@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from glob import glob
 from os import path
 from typing import Union, Callable, List
@@ -30,6 +30,8 @@ class TrainingPipeline:
     early_stopping_rounds: int = None
 
     metrics_calculator = BaseMetricCalculator()
+    model: LightGBMModel = field(init=False, default=None)
+    feature_transformer: FeatureTransformer = field(init=False, default=None)
 
     def fit(self, dataset_builder):
         self._raise_error_if_data_not_compatible(dataset_builder)
@@ -42,6 +44,11 @@ class TrainingPipeline:
         print(parameters)
         model = LightGBMModel(parameters=parameters, rounds=self.num_boost_round)
         model.train(train_ds, val_ds)
+        self.model = model
+        self.feature_transformer = feature_transformer
+        if self.log_dir:
+            model.booster.save_model(path.join(self.log_dir, "lgb_classifier.txt"))
+            feature_transformer.save()
         # Eval
         predictions_on_train = model.predict(train_ds.data)
         predictions = model.booster.predict(val_ds.data)
@@ -76,6 +83,46 @@ class TrainingPipeline:
             self._evaluate_on_test_data(
                 model, feature_transformer, dataset_builder.testing_dataset()
             )
+
+    def predict(self, df: Union[str, pd.DataFrame], **kwargs):
+        """Predict using the trained model on new data.
+
+        Args:
+            df: Raw features as a :class:`pandas.DataFrame` or path to a CSV file.
+
+        Returns:
+            The model predictions.
+        """
+        if self.model is None or self.feature_transformer is None:
+            raise ValueError("Model is not trained. Call `fit` first.")
+        df = self._load_training_dataframe(df)
+        features = self.feature_transformer.transform(df)
+        return self.model.predict(features, **kwargs)
+
+    @classmethod
+    def load(cls, model_dir: str) -> "TrainingPipeline":
+        """Load a trained pipeline from saved artifacts.
+
+        Args:
+            model_dir: Directory containing ``lgb_classifier.txt`` and
+                ``feature_transformer.json``.
+
+        Returns:
+            A :class:`TrainingPipeline` ready for :meth:`predict`.
+        """
+        model = LightGBMModel()
+        if model.load_model(model_dir) is None:
+            raise FileNotFoundError(f"No model artifacts found in {model_dir}")
+        ft = model.feature_transformer
+        pipeline = cls(
+            categorical_feature_columns=ft.categorical_features,
+            numerical_feature_columns=ft.numerical_features,
+            label_column=ft.target,
+            log_dir=model_dir,
+        )
+        pipeline.model = model
+        pipeline.feature_transformer = ft
+        return pipeline
 
     def _raise_error_if_data_not_compatible(self, dataset_builder):
         if not self.data_is_compatible(dataset_builder):
@@ -128,7 +175,8 @@ class TrainingPipeline:
                 params[k] = v
         return params
 
-    def _load_training_dataframe(self, df: Union[str, pd.DataFrame]):
+    @staticmethod
+    def _load_training_dataframe(df: Union[str, pd.DataFrame]):
         if isinstance(df, str):
             filepath = df
             if path.isdir(filepath):

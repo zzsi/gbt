@@ -67,9 +67,17 @@ class BaseMetricCalculator:
         y_pred = np.array(y_pred)
         if y_pred.ndim == 1 or y_pred.shape[1] == 1:
             pred_labels = (y_pred > 0.5).astype(int)
-            auc = roc_auc_score(y_true, y_pred)
+            # Check if there are at least 2 classes present for AUC calculation
+            if len(np.unique(y_true)) < 2:
+                auc = float('nan')  # AUC is undefined with only one class
+            else:
+                auc = roc_auc_score(y_true, y_pred)
         else:
             pred_labels = np.argmax(y_pred, axis=1)
-            auc = roc_auc_score(y_true, y_pred, multi_class="ovo")
+            # Check if there are at least 2 classes present for AUC calculation
+            if len(np.unique(y_true)) < 2:
+                auc = float('nan')  # AUC is undefined with only one class
+            else:
+                auc = roc_auc_score(y_true, y_pred, multi_class="ovo")
         acc = accuracy_score(y_true, pred_labels)
         return {"accuracy": acc, "auc": auc}
