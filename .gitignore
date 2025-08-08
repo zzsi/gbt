@@ -4,6 +4,7 @@
 
 # Repo specific
 run.py
+/venv
 
 ### OSX ###
 # General
