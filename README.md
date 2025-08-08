@@ -37,133 +37,114 @@ pip install gbt
 
 ```python
 import pandas as pd
-from gbt import TrainingPipeline
+from gbt import train
 
-train_df = pd.DataFrame(
-    {
-        "a": [1, 2, 3, 4, 5, 6, 7],
-        "b": ["a", "b", "c", None, "e", "f", "g"],
-        "c": [1, 0, 1, 1, 0, 0, 1],
-        "some_other_column": [0, 0, None, None, None, 3, 3],
-    }
+# Your data
+df = pd.DataFrame({
+    "feature_1": [1, 2, 3, 4, 5],
+    "category": ["A", "B", "A", "C", "B"], 
+    "target": [0, 1, 0, 1, 1]
+})
+
+# Train model
+model = train(
+    df,
+    model_lib="binary",  # binary, multiclass, mape, or l2
+    label_column="target",
+    categorical_feature_columns=["category"],
+    numerical_feature_columns=["feature_1"]
 )
 
-class DatasetBuilder:
-    def training_dataset(self):
-        return train_df
-    
-    def testing_dataset(self):
-        return train_df  # replace with a real test dataset in practice
-
-TrainingPipeline(
-    params_preset="binary",  # one of mape, l2, binary, multiclass
-    params_override={"num_leaves": 10},
-    label_column="c",
-    val_size=0.2,  # fraction of the validation split
-    categorical_feature_columns=["b"],
-    numerical_feature_columns=["a"],
-).fit(DatasetBuilder())
+# Make predictions
+new_data = pd.DataFrame({
+    "feature_1": [6, 7],
+    "category": ["A", "B"]
+})
+predictions = model.predict(new_data)
+print(predictions)  # [0.23, 0.78]
 ```
 
-## Output of training
-
-The output includes:
-
-- the model file (decision trees and boosting coefficients),
-- a feature transformer state file (in JSON)
-
-## Using the model to predict on new data
-
-### Simple API (Recommended)
+## Save and Load Models
 
 ```python
-# Train and save artifacts
-from gbt import train, load
-
-pipeline = train(
-    df,
-    model_lib="binary",  # one of binary, multiclass, mape, l2
-    label_column="c",
-    categorical_feature_columns=["b"],
-    numerical_feature_columns=["a"],
-    val_size=0.2,
-    log_dir="my_model",
-)
-
-# Option 1: Use pipeline directly (backward compatible)
-predictions = pipeline.predict(new_df)
-
-# Option 2: Get clean model for deployment (recommended)
-model = pipeline.create_model()
-predictions = model.predict(new_df)
+# Save model
 model.save("my_model")
 
-# Later: Load model for inference
-from gbt import GBTModel
-model = GBTModel.load("my_model")  # or use load("my_model")
-predictions = model.predict(new_df)
+# Load model later
+from gbt import load
+loaded_model = load("my_model")
+predictions = loaded_model.predict(new_data)
 ```
 
-### Advanced Usage
+## Advanced Usage
+
+For more control over training:
 
 ```python
-# For more control during training
 from gbt import TrainingPipeline
 
+# Custom training configuration  
 pipeline = TrainingPipeline(
-    categorical_feature_columns=["b"],
-    numerical_feature_columns=["a"],
+    categorical_feature_columns=["category"],
+    numerical_feature_columns=["feature_1"],
     params_preset="binary",
-    val_size=0.2,
-    verbose=False  # Suppress training output
+    params_override={"num_leaves": 50},  # Custom hyperparameters
+    val_size=0.3,  # 30% validation split
+    verbose=False   # Quiet training
 )
-pipeline.fit(dataset_builder)
 
-# Export clean model for production
+# Train with custom data loader
+class DatasetBuilder:
+    def training_dataset(self):
+        return pd.read_csv("train.csv")
+    
+    def testing_dataset(self):
+        return pd.read_csv("test.csv")
+
+pipeline.fit(DatasetBuilder())
+
+# Get model for deployment
 model = pipeline.create_model()
 model.save("production_model")
 ```
 
 ## API Reference
 
-### Training
+### Main Functions
 
-#### `train(df, model_lib="l2", label_column, categorical_feature_columns, numerical_feature_columns, val_size=0.2, log_dir=None)`
+#### `train(df, model_lib="l2", label_column, categorical_feature_columns, numerical_feature_columns, **kwargs)`
 
-Train a model with simplified API.
+Train a gradient boosting model.
 
+**Parameters:**
 - `df`: Training dataframe
-- `model_lib`: One of "binary", "multiclass", "mape", "l2" 
-- `label_column`: Target column name
+- `model_lib`: Model type - `"binary"`, `"multiclass"`, `"mape"`, or `"l2"`
+- `label_column`: Target column name  
 - `categorical_feature_columns`: List of categorical feature names
 - `numerical_feature_columns`: List of numerical feature names
 - `val_size`: Validation split fraction (default 0.2)
-- `log_dir`: Directory to save model artifacts
-- Returns: `TrainingPipeline` instance
+- `log_dir`: Directory to save artifacts (optional)
 
-#### `TrainingPipeline`
+**Returns:** Trained model ready for prediction
 
-- `.fit(dataset_builder)`: Train the model
-- `.create_model()`: Export `GBTModel` for inference
-- `.predict(df)`: Predict (backward compatible)
+#### `load(path)`
 
-### Inference
+Load a saved model.
 
-#### `GBTModel`
+**Returns:** Model ready for inference
 
-Minimal model for production inference.
+### Model Types
 
-- `.predict(df)`: Make predictions on new data
-- `.save(path)`: Save model artifacts
-- `.load(path)`: Load model from artifacts (class method)
+| `model_lib` | Use Case | Loss Function |
+|-------------|----------|---------------|
+| `"binary"` | Binary classification | Log loss |
+| `"multiclass"` | Multi-class classification | Multi-class log loss |
+| `"l2"` | Regression | Mean squared error |
+| `"mape"` | Regression | Mean absolute percentage error |
 
-#### `load(log_dir)`
+### Model Methods
 
-Load a saved model for inference. Returns `GBTModel` instance.
+- `.predict(df)`: Make predictions
+- `.save(path)`: Save model to disk
 
-### Model Presets
-
-- `"binary"`: Binary classification with log loss
-- `"multiclass"`: Multi-class classification
-- `"mape"`: Regression with MAPE objective
-- `"l2"`: Regression with L2/MSE objective (default)
+For advanced usage, see `TrainingPipeline` class documentation.

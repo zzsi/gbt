@@ -57,7 +57,7 @@ def test_predict_after_training():
             "c": [1, 0, 1],
         }
     )
-    pipeline = train(
+    model = train(
         df,
         model_lib="binary",
         label_column="c",
@@ -65,7 +65,7 @@ def test_predict_after_training():
         categorical_feature_columns=["b"],
         numerical_feature_columns=["a"],
     )
-    preds = pipeline.predict(df)
+    preds = model.predict(df)
     assert len(preds) == len(df)
 
 
@@ -126,8 +126,8 @@ def test_gbt_model_creation_and_prediction():
             "c": [1, 0, 1],
         }
     )
-    # Train using pipeline
-    pipeline = train(
+    # Train now returns GBTModel directly
+    model = train(
         df,
         model_lib="binary",
         label_column="c",
@@ -136,8 +136,7 @@ def test_gbt_model_creation_and_prediction():
         numerical_feature_columns=["a"],
     )
     
-    # Create GBTModel from pipeline
-    model = pipeline.create_model()
+    # Should be GBTModel instance
     assert isinstance(model, GBTModel)
     
     # Test prediction works

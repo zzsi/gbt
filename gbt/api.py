@@ -32,16 +32,19 @@ def train(
     sort_by_columns=None,
     add_categorical_stats: bool = False,
     pretrain_size: float = 0,
-    val_size: float = 0.1,
+    val_size: float = 0.2,
     log_dir: Optional[str] = None,
     metrics_calculator: Optional[BaseMetricCalculator] = None,
     params_override: Optional[dict] = None,
     early_stopping_rounds: Optional[int] = None,
     num_boost_round: int = 30,
-):
-    """Train a model using :class:`TrainingPipeline`.
+) -> GBTModel:
+    """Train a gradient boosting model.
 
     Parameters mirror those of :class:`TrainingPipeline.fit` for convenience.
+    
+    Returns:
+        GBTModel: Trained model ready for inference.
     """
     pipeline = TrainingPipeline(
         categorical_feature_columns=categorical_feature_columns or [],
@@ -62,7 +65,7 @@ def train(
         pipeline.metrics_calculator = metrics_calculator
     dataset_builder = _DatasetBuilder(df, df_test)
     pipeline.fit(dataset_builder)
-    return pipeline
+    return pipeline.create_model()  # Return clean GBTModel for inference
 
 
 def load(log_dir: str) -> GBTModel:
