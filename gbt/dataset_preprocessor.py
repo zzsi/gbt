@@ -76,7 +76,6 @@ class DataPreprocessor:
         )
 
     def preprocess(self):
-        # TODO: sort_by_columns rename to sortby_columns. Allow desc, asc.
         if self.sort_by_columns is not None and len(self.sort_by_columns) > 0:
             self.df.sort_values(by=self.sort_by_columns, inplace=True)
 

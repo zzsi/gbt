@@ -6,6 +6,7 @@ import pandas as pd
 from .training_pipeline import TrainingPipeline
 from .params_preset import ParamsPreset
 from .metrics import BaseMetricCalculator
+from .model import GBTModel
 
 
 @dataclass
@@ -64,11 +65,14 @@ def train(
     return pipeline
 
 
-def load(log_dir: str) -> TrainingPipeline:
-    """Load a trained pipeline from ``log_dir``.
+def load(log_dir: str) -> GBTModel:
+    """Load a trained model from ``log_dir``.
 
     Parameters:
         log_dir: Directory where the training artifacts were saved.
+        
+    Returns:
+        GBTModel instance ready for inference.
     """
-    return TrainingPipeline.load(log_dir)
+    return GBTModel.load(log_dir)
 

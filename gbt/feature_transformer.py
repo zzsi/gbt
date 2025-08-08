@@ -39,7 +39,6 @@ class FeatureTransformer:
             computed as mean and count (and other stats) of the target value per level.
             The stats could be computed in a windowing fashion.
         """
-        # TODO: rename target to label_column
         self.target = target
         assert self.target is not None, "No target column. What should I predict?"
         self.categorical_features = categorical_features
@@ -56,8 +55,6 @@ class FeatureTransformer:
             self.load()
         self.add_categorical_stats = add_categorical_stats
         self.drop_categoricals = drop_categoricals
-        # TODO: not being able save preprocess_fn, postprocess_fn can be problem
-        #   if these functions change frequently.
         self.preprocess_fn = preprocess_fn
         self.postprocess_fn = postprocess_fn
         self.count_vectorize = count_vectorize
@@ -88,14 +85,12 @@ class FeatureTransformer:
                 add_categorical_stats=obj["add_categorical_stats"],
                 order_categoricals=obj.get("order_categoricals", False),
                 drop_categoricals=obj.get("drop_categoricals", False),
-                # TODO: not being able save preprocess_fn, postprocess_fn can be problem
             )
             feature_transfomer.cats_encoder = {}
             for feature_name, vocab in feature_transfomer.cats.items():
                 feature_transfomer.cats_encoder[feature_name] = {
                     value: i for i, value in enumerate(vocab)
                 }
-            print(f"Feature transformer loaded from {feature_transfomer.output_path}")
             return feature_transfomer
 
     def fit(self, df):
